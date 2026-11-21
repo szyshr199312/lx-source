@@ -1,9 +1,10 @@
 /*!
- * 洋仔聚合音源 (no-eval / race build)
+ * 洋仔聚合音源 (no-eval / sequential-fallback v3)
  * 打包: jiexiang + qingliang
- * 生成时间: 2026-11-21T10:51:59.813Z
- * 说明: 源码级内联，不使用 eval / new Function，兼容 Hermes 等动态执行受限的 JS 引擎
- * 调度: 并发竞速，任一子源成功即返回，避免串行 fallback 叠加超时
+ * 生成时间: 2026-11-21T11:12:36.463Z
+ * 说明: 源码级内联，不使用 eval / new Function，兼容 Hermes
+ * 调度: 串行 fallback，按打包顺序优先，首个成功即返回
+ * 声明: 每个平台沿用"第一优先源"的原始 qualitys/actions，不做合并
  */
 ;(function () {
   'use strict'
@@ -42,7 +43,8 @@
     return fake
   }
 
-  var TOTAL_TIMEOUT = 9000
+  var PER_TIMEOUT = 6000
+  var TOTAL_TIMEOUT = 15000
 
 // ==================== 子源: jiexiang ====================
 ;(function (__lx) {
@@ -2698,10 +2700,11 @@ console.log('[咪咕音乐] 后端数: ' + MG_BACKENDS.length)
 
 })(__SUB_REGISTER("qingliang"));
 
-  // ==================== 汇总已注册子源 ====================
+  // ==================== 平台声明：取第一优先源，不做合并 ====================
   var merged = {}
   var order = []
   var loaded = []
+  var owner = {}
 
   for (var i = 0; i < SUBS.length; i++) {
     var st = SUBS[i]
@@ -2710,33 +2713,28 @@ console.log('[咪咕音乐] 后端数: ' + MG_BACKENDS.length)
     var srcs = st.inited.sources
     for (var k in srcs) {
       if (!Object.prototype.hasOwnProperty.call(srcs, k)) continue
+      if (merged[k]) continue          // 已由更高优先级的源接管，跳过
       var s = srcs[k]
-      if (!merged[k]) {
-        merged[k] = {
-          name: s.name,
-          type: s.type || 'music',
-          actions: (s.actions || ['musicUrl']).slice(),
-          qualitys: (s.qualitys || []).slice()
-        }
-        order.push(k)
-      } else {
-        var q = merged[k].qualitys
-        var sq = s.qualitys || []
-        for (var j = 0; j < sq.length; j++) {
-          if (q.indexOf(sq[j]) < 0) q.push(sq[j])
-        }
-        var sa = s.actions || []
-        for (var m = 0; m < sa.length; m++) {
-          if (merged[k].actions.indexOf(sa[m]) < 0) merged[k].actions.push(sa[m])
-        }
+      merged[k] = {
+        name: s.name,
+        type: s.type || 'music',
+        actions: (s.actions || ['musicUrl']).slice(),
+        qualitys: (s.qualitys || []).slice()
       }
+      owner[k] = st.name
+      order.push(k)
     }
   }
 
   try {
     console.log('[洋仔聚合] 可用子源 ' + loaded.length + '/' + SUBS.length + ': ' + loaded.join(' / '))
-    console.log('[洋仔聚合] 覆盖平台: ' + (order.join(', ') || '无'))
-    console.log('[洋仔聚合] 调度: 并发竞速, 总超时 ' + TOTAL_TIMEOUT + 'ms')
+    var report = []
+    for (var oi = 0; oi < order.length; oi++) {
+      var pk = order[oi]
+      report.push(pk + '(' + owner[pk] + ')')
+    }
+    console.log('[洋仔聚合] 平台归属: ' + (report.join(', ') || '无'))
+    console.log('[洋仔聚合] 调度: 串行 fallback, 单源 ' + PER_TIMEOUT + 'ms, 总 ' + TOTAL_TIMEOUT + 'ms')
   } catch (e) {}
 
   if (!order.length) {
@@ -2749,65 +2747,95 @@ console.log('[咪咕音乐] 后端数: ' + MG_BACKENDS.length)
     return
   }
 
-  function handleRequest(payload) {
-    var source = payload && payload.source
-    var cands = []
+  function isUsableUrl(u) {
+    return typeof u === 'string' && /^https?:\/\//i.test(u.trim()) && u.trim().length > 12
+  }
+
+  // 按音质筛候选源：请求 320k/flac 时，只声明 128k 的源不参与，
+  // 否则它会返回与该音质无关的垃圾地址，播放器表现为"播放报错"
+  function candidatesFor(source, quality) {
+    var strict = []
+    var loose = []
     for (var i = 0; i < SUBS.length; i++) {
       var st = SUBS[i]
-      if (st.ok && st.handler && st.inited.sources && st.inited.sources[source]) cands.push(st)
+      if (!st.ok || !st.handler || !st.inited.sources) continue
+      var decl = st.inited.sources[source]
+      if (!decl) continue
+      loose.push(st)
+      if (!quality) { strict.push(st); continue }
+      var qs = decl.qualitys || []
+      if (!qs.length || qs.indexOf(quality) >= 0) strict.push(st)
     }
+    return strict.length ? strict : loose
+  }
+
+  function handleRequest(payload) {
+    var source = payload && payload.source
+    var info = (payload && payload.info) || {}
+    var quality = info.type
+    var cands = candidatesFor(source, quality)
     if (!cands.length) {
       return Promise.reject(new Error('[洋仔聚合] 没有支持 ' + source + ' 的可用子源'))
     }
 
+    var errors = []
+    var t0 = Date.now()
+
     return new Promise(function (resolve, reject) {
-      var done = false
-      var pending = cands.length
-      var errors = []
-      var timer = setTimeout(function () {
-        if (done) return
-        done = true
+      var idx = 0
+      var globalTimer = setTimeout(function () {
         reject(new Error('[洋仔聚合] 总超时 ' + TOTAL_TIMEOUT + 'ms\n' + errors.join('\n')))
       }, TOTAL_TIMEOUT)
 
-      function settle(err, url) {
-        if (done) return
-        done = true
-        clearTimeout(timer)
+      function done(err, url) {
+        clearTimeout(globalTimer)
         if (err) reject(err)
         else resolve(url)
       }
 
-      function oneFail(st, e) {
-        errors.push('  ' + st.name + ': ' + ((e && e.message) || e))
-        pending--
-        if (pending === 0) {
-          settle(new Error('[洋仔聚合] 全部音源失败（' + cands.length + ' 个）\n' + errors.join('\n')))
+      function attempt() {
+        if (idx >= cands.length) {
+          return done(new Error('[洋仔聚合] 全部音源失败（' + cands.length + ' 个）\n' + errors.join('\n')))
+        }
+        var st = cands[idx++]
+        var settled = false
+        var timer = setTimeout(function () {
+          if (settled) return
+          settled = true
+          errors.push('  ' + st.name + ': 超时(' + PER_TIMEOUT + 'ms)')
+          attempt()
+        }, PER_TIMEOUT)
+
+        function finish(err, url) {
+          if (settled) return
+          settled = true
+          clearTimeout(timer)
+          if (err) {
+            errors.push('  ' + st.name + ': ' + ((err && err.message) || err))
+            return attempt()
+          }
+          if (!isUsableUrl(url)) {
+            errors.push('  ' + st.name + ': 返回非法地址 ' + String(url).slice(0, 60))
+            return attempt()
+          }
+          try { console.log('[洋仔聚合] ' + source + ' 命中 ' + st.name + ' ' + (Date.now() - t0) + 'ms') } catch (e) {}
+          done(null, String(url).trim())
+        }
+
+        var ret
+        try {
+          ret = st.handler(payload)
+        } catch (e) {
+          return finish(e)
+        }
+        if (ret && typeof ret.then === 'function') {
+          ret.then(function (u) { finish(null, u) }, function (e) { finish(e) })
+        } else {
+          finish(null, ret)
         }
       }
 
-      for (var n = 0; n < cands.length; n++) {
-        (function (st) {
-          var ret
-          try {
-            ret = st.handler(payload)
-          } catch (e) {
-            return oneFail(st, e)
-          }
-          if (ret && typeof ret.then === 'function') {
-            ret.then(function (u) {
-              if (u) settle(null, u)
-              else oneFail(st, new Error('空结果'))
-            }, function (e) {
-              oneFail(st, e)
-            })
-          } else if (ret) {
-            settle(null, ret)
-          } else {
-            oneFail(st, new Error('空结果'))
-          }
-        })(cands[n])
-      }
+      attempt()
     })
   }
 
