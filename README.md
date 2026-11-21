@@ -1,5 +1,7 @@
 # 洛雪音乐音源合集（自建镜像）
 
+**仓库地址**：<https://github.com/szyshr199312/lx-source>
+
 给自己的洛雪音乐（LX Music）用的音源仓库。内容采集自公开社区音源，每天对比上游更新。
 
 用途：电视 / 手机 / 电脑三端统一从这个仓库导入音源，链接固定不变，上游挂了也不影响自己。
@@ -15,18 +17,31 @@
 
 洛雪里打开 **设置 → 基础设置 → 自定义源管理 → 导入 → 在线导入**，粘贴下面对应的链接。
 
-把链接里的 `USER` 换成你的 GitHub 用户名，`REPO` 换成这个仓库名：
+本仓库 2026-11-21 实测：`raw.githubusercontent.com` **直连可用**（823 ms），`gh-proxy.org` 也可用（1.2 s）；`cdn.jsdelivr.net` 在本机 TLS 握手被重置，**不可用**，别用。
+
+**主链接（GitHub 直连）**：
 
 ```
-https://cdn.jsdelivr.net/gh/USER/REPO@main/jiexiang/latest.js
+https://raw.githubusercontent.com/szyshr199312/lx-source/main/jiexiang/latest.js
 ```
 
-`cdn.jsdelivr.net` 国内可直连，比 `raw.githubusercontent.com` 稳。
-
-如果 jsdelivr 也不通，换成：
+**备用（直连不通时，整段前面加 `https://gh-proxy.org/`）**：
 
 ```
-https://gh-proxy.org/raw.githubusercontent.com/USER/REPO/main/jiexiang/latest.js
+https://gh-proxy.org/raw.githubusercontent.com/szyshr199312/lx-source/main/jiexiang/latest.js
+```
+
+其他镜像前缀（把 `gh-proxy.org` 替换掉即可）：`gh.llkk.cc`、`github.moeyy.xyz`、`ghproxy.cn`、`ghproxy.net`
+
+六个推荐音源一次贴完：
+
+```
+https://raw.githubusercontent.com/szyshr199312/lx-source/main/jiexiang/latest.js
+https://raw.githubusercontent.com/szyshr199312/lx-source/main/qingliang/latest.js
+https://raw.githubusercontent.com/szyshr199312/lx-source/main/xinglan/latest.js
+https://raw.githubusercontent.com/szyshr199312/lx-source/main/changqing/latest.js
+https://raw.githubusercontent.com/szyshr199312/lx-source/main/fish/latest.js
+https://raw.githubusercontent.com/szyshr199312/lx-source/main/xinghai/latest.js
 ```
 
 ### 方式 2：本地文件导入（电视上最省事）
