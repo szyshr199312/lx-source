@@ -1,10 +1,21 @@
 /*!
- * 洋仔聚合音源 (no-eval / sequential-fallback v3)
- * 打包: jiexiang + qingliang + xinglan + xinghai
- * 生成时间: 2026-11-21T11:12:37.542Z
- * 说明: 源码级内联，不使用 eval / new Function，兼容 Hermes
- * 调度: 串行 fallback，按打包顺序优先，首个成功即返回
- * 声明: 每个平台沿用"第一优先源"的原始 qualitys/actions，不做合并
+ * @name 洋仔聚合音源
+ * @description QQ音乐 / 网易云 / 酷我 / 酷狗 / 咪咕 / 汽水，六平台聚合（杰翔+轻量+星澜+星海）
+ * @version 1.0.5
+ * @author 洋仔
+ * @homepage https://github.com/szyshr199312/lx-source
+ * @license MIT
+ * @update 2026-11-21
+ */
+
+/*
+ * 构建说明（不是洛雪元数据字段，仅作记录）
+ *   打包子源: jiexiang + qingliang + xinglan + xinghai
+ *   构建时间: 2026-11-21T11:17:38.864Z
+ *   技术路线: 源码级内联，不使用 eval / new Function，兼容 React Native / Hermes
+ *   调度策略: 串行 fallback，按打包顺序优先，首个可用结果即返回
+ *   平台声明: 每个平台沿用"第一优先源"的原始 qualitys / actions，不做合并
+ *   音质筛选: 请求的音质只有被该子源明确声明时才成为候选，防止错配返回垃圾地址
  */
 ;(function () {
   'use strict'
@@ -19,10 +30,12 @@
   var EN = __lx.EVENT_NAMES || {}
   var EV_REQ = EN.request || 'request'
   var EV_INIT = EN.inited || 'inited'
+  var SELF_NAME = '洋仔聚合音源'
+  var SELF_VERSION = '1.0.5'
 
   var SUBS = []
 
-  function __SUB_REGISTER(name) {
+  function __SUB_REGISTER(name, rawScript) {
     var state = { name: name, handler: null, inited: null, ok: false }
     var fake = {
       EVENT_NAMES: EN,
@@ -37,7 +50,13 @@
       utils: __lx.utils,
       env: __lx.env,
       version: __lx.version,
-      currentScriptInfo: __lx.currentScriptInfo
+      // 每个子源看到的是"自己的"脚本信息，rawScript 只用各自头部注释，
+      // 否则 @tx_cookie / @wy_cookie 解析会读到合并版 banner
+      currentScriptInfo: {
+        name: SELF_NAME,
+        version: SELF_VERSION,
+        rawScript: rawScript || ''
+      }
     }
     SUBS.push(state)
     return fake
@@ -2217,7 +2236,7 @@ console.log('[酷我音乐] 后端数: ' + KW_BACKENDS.length)
 console.log('[酷狗音乐] 后端数: ' + KG_BACKENDS.length + ' 主API: 长青海棠')
 console.log('[咪咕音乐] 后端数: ' + MG_BACKENDS.length)
 
-})(__SUB_REGISTER("jiexiang"));
+})(__SUB_REGISTER("jiexiang", "/*!\n * @name 杰翔聚合音源\n * @description 全平台支持flac，wy，qq，kw，kg支持母带\n * @version 2.3.0\n * @author https://qm.qq.com/cgi-bin/qm/qr?k=dEBGYbmu1lIRp7bAgHFim0W1uDsYl9v5&jump_from=webapi&authKey=fmTG96MhfqDQ5KARA/OvnuWAigCAloClvYhtSiEQd0jQneXmGons54BwlAh1+bUi\n * @homepage https://github.com/haonanren118/jiexiang-Music-Source\n * @license MIT\n * @update 2026-09-13\n * @changelog\n    1.修复wy音源\n    2.新增QQ越权\n */"));
 
 // ==================== 子源: qingliang ====================
 ;(function (__lx) {
@@ -2698,7 +2717,7 @@ console.log('[咪咕音乐] 后端数: ' + MG_BACKENDS.length)
   lx.send(lx.EVENT_NAMES.inited, { status: true, sources: sources });
 })();
 
-})(__SUB_REGISTER("qingliang"));
+})(__SUB_REGISTER("qingliang", ""));
 
 // ==================== 子源: xinglan ====================
 ;(function (__lx) {
@@ -4345,7 +4364,7 @@ console.log('[星澜] QQ 主线路: 落月（api.vkeys.cn）；备用: 云记 / 
 console.log('[星澜] 后端数 QQ:' + TX_BACKENDS.length + ' 网易:' + WY_BACKENDS.length + ' 酷我:' + KW_BACKENDS.length + ' 酷狗:' + KG_BACKENDS.length + ' 咪咕:' + MG_BACKENDS.length + ' 汽水:' + QS_BACKENDS.length)
 console.log('[星澜] QQ Cookie: ' + (HAS_TX_COOKIE ? '已配置' : '未配置') + ' | 网易 Cookie: ' + (HAS_WY_COOKIE ? '已配置' : '未配置'))
 console.log('[星澜] 缓存 ' + (CACHE_TTL / 60000) + ' 分钟 | 限流 ' + RATE_LIMIT_MAX + ' 次/' + (RATE_LIMIT_WINDOW / 1000) + ' 秒')
-})(__SUB_REGISTER("xinglan"));
+})(__SUB_REGISTER("xinglan", "/*!\n * @name 星澜聚合音源 (StellarWave)\n * @description 星澜 v4.0.2 与墨澜 v2.3.6 融合版：落月 QQ 主线路 + 云记（海堂）/HYWmusic/星海/念心等备用后端，支持母带/全景声/汽水音乐\n * @version v4.0.2\n * @author 星澜团队\n * @homepage https://github.com/your-repo/StellarWave\n * @license MIT\n * @update 2026-11-06\n * @changelog\n *   - v4.0.2 (2026-11-06)\n *     · QQ 音乐主线路改为「落月」API（api.vkeys.cn），v2 geturl 失败自动降级到 v3 song/link\n *     · 落月音质映射：6=128k 8=320k 10=flac 11=hires 13=atmos 16=atmos_plus 14=master\n *     · 修复 HYWmusic 后端：卡密 6C1F-53W0-GRKI-EVFG，完整 musicInfo 参数（对齐 HYWmusic v1.2.0）\n *     · QQ / 酷狗后端池 HYWmusic 提升到可用位置\n *     · QQ 官方后端从 Cookie 提取真实 uin，检测试听片段（freeTrialInfo / RS0），避免只播放几秒\n *     · 各平台 HYWmusic 后端统一 getHYWMusicUrl 实现，按平台做音质降级映射\n *     · 白姬KG 卡密同步更新为 6C1F-53W0-GRKI-EVFG\n *   - v4.0.1 (2026-11-05) 修复与合并版本\n *     · 融合墨澜 v2.3.5：QQ / 咪咕 / 酷狗采用云记（海堂）resolve-url 为主线路\n *     · 新增汽水音乐 (qs) 音源（星海汽水双线路）\n *     · 咪咕：云记主线路 + 音质路径改写与降级探测\n *     · 网易云官方 enhance/player/url/v1：ids 改为 \"[id]\" 字符串，immerseType 仅 sky 携带\n *     · QQ 官方文件前缀：臻品母带 AI00、臻品音质 Q000、全景声 Q001/Q003\n *     · 移除 QQ 越权后端；URL 缓存 20 分钟；并发合并；滑动窗口限流\n *     · 请求 body 统一序列化为 JSON，全部请求增加超时兜底\n *     · 酷我：高音质走流媒体直链，普通音质跳过流媒体直链\n */"));
 
 // ==================== 子源: xinghai ====================
 ;(function (__lx) {
@@ -4887,7 +4906,7 @@ on(EVENT_NAMES.request, async ({ action, source, info }) => {
     fetchIp();
     checkUpdate();
 })();
-})(__SUB_REGISTER("xinghai"));
+})(__SUB_REGISTER("xinghai", "/*!\n * @name         星海音乐源\n * @description  GDAPI | 聚合 | ChKSz API | 全平台支持 24bit FLAC，网易、酷狗、QQ 最高支持母带｜建议与反馈：https://yy.zddyr.top/survey.php?k=192ee708d4721bc9077f8f1738296c1b\n * @version      v3.2.18\n * @author       万去了了 / 科学大魔王\n * @homepage     https://zddyr.top/\n * @see          http://gc.kxwa.top/\n * @lastUpdate   2026-11-08\n * @update       优化酷我：修复部分歌曲取链接失败\n * @update       使用体验反馈：https://yy.zddyr.top/survey.php?k=192ee708d4721bc9077f8f1738296c1b\n * @license      仅供学习交流，请支持正版\n */"));
 
   // ==================== 平台声明：取第一优先源，不做合并 ====================
   var merged = {}
@@ -4902,7 +4921,7 @@ on(EVENT_NAMES.request, async ({ action, source, info }) => {
     var srcs = st.inited.sources
     for (var k in srcs) {
       if (!Object.prototype.hasOwnProperty.call(srcs, k)) continue
-      if (merged[k]) continue          // 已由更高优先级的源接管，跳过
+      if (merged[k]) continue
       var s = srcs[k]
       merged[k] = {
         name: s.name,
@@ -4940,8 +4959,6 @@ on(EVENT_NAMES.request, async ({ action, source, info }) => {
     return typeof u === 'string' && /^https?:\/\//i.test(u.trim()) && u.trim().length > 12
   }
 
-  // 按音质筛候选源：请求 320k/flac 时，只声明 128k 的源不参与，
-  // 否则它会返回与该音质无关的垃圾地址，播放器表现为"播放报错"
   function candidatesFor(source, quality) {
     var strict = []
     var loose = []
@@ -5007,7 +5024,7 @@ on(EVENT_NAMES.request, async ({ action, source, info }) => {
             errors.push('  ' + st.name + ': 返回非法地址 ' + String(url).slice(0, 60))
             return attempt()
           }
-          try { console.log('[洋仔聚合] ' + source + ' 命中 ' + st.name + ' ' + (Date.now() - t0) + 'ms') } catch (e) {}
+          try { console.log('[洋仔聚合] ' + source + '/' + quality + ' 命中 ' + st.name + ' ' + (Date.now() - t0) + 'ms') } catch (e) {}
           done(null, String(url).trim())
         }
 
