@@ -1,10 +1,21 @@
 /*!
- * 洋仔聚合音源 (no-eval / sequential-fallback v3)
- * 打包: jiexiang + qingliang
- * 生成时间: 2026-11-21T11:12:36.463Z
- * 说明: 源码级内联，不使用 eval / new Function，兼容 Hermes
- * 调度: 串行 fallback，按打包顺序优先，首个成功即返回
- * 声明: 每个平台沿用"第一优先源"的原始 qualitys/actions，不做合并
+ * @name 洋仔聚合音源
+ * @description QQ音乐 / 网易云 / 酷我 / 酷狗 / 咪咕 / 汽水，六平台聚合（杰翔+轻量+星澜+星海）
+ * @version 1.0.5
+ * @author 洋仔
+ * @homepage https://github.com/szyshr199312/lx-source
+ * @license MIT
+ * @update 2026-11-21
+ */
+
+/*
+ * 构建说明（不是洛雪元数据字段，仅作记录）
+ *   打包子源: jiexiang + qingliang
+ *   构建时间: 2026-11-21T11:17:38.808Z
+ *   技术路线: 源码级内联，不使用 eval / new Function，兼容 React Native / Hermes
+ *   调度策略: 串行 fallback，按打包顺序优先，首个可用结果即返回
+ *   平台声明: 每个平台沿用"第一优先源"的原始 qualitys / actions，不做合并
+ *   音质筛选: 请求的音质只有被该子源明确声明时才成为候选，防止错配返回垃圾地址
  */
 ;(function () {
   'use strict'
@@ -19,10 +30,12 @@
   var EN = __lx.EVENT_NAMES || {}
   var EV_REQ = EN.request || 'request'
   var EV_INIT = EN.inited || 'inited'
+  var SELF_NAME = '洋仔聚合音源'
+  var SELF_VERSION = '1.0.5'
 
   var SUBS = []
 
-  function __SUB_REGISTER(name) {
+  function __SUB_REGISTER(name, rawScript) {
     var state = { name: name, handler: null, inited: null, ok: false }
     var fake = {
       EVENT_NAMES: EN,
@@ -37,7 +50,13 @@
       utils: __lx.utils,
       env: __lx.env,
       version: __lx.version,
-      currentScriptInfo: __lx.currentScriptInfo
+      // 每个子源看到的是"自己的"脚本信息，rawScript 只用各自头部注释，
+      // 否则 @tx_cookie / @wy_cookie 解析会读到合并版 banner
+      currentScriptInfo: {
+        name: SELF_NAME,
+        version: SELF_VERSION,
+        rawScript: rawScript || ''
+      }
     }
     SUBS.push(state)
     return fake
@@ -2217,7 +2236,7 @@ console.log('[酷我音乐] 后端数: ' + KW_BACKENDS.length)
 console.log('[酷狗音乐] 后端数: ' + KG_BACKENDS.length + ' 主API: 长青海棠')
 console.log('[咪咕音乐] 后端数: ' + MG_BACKENDS.length)
 
-})(__SUB_REGISTER("jiexiang"));
+})(__SUB_REGISTER("jiexiang", "/*!\n * @name 杰翔聚合音源\n * @description 全平台支持flac，wy，qq，kw，kg支持母带\n * @version 2.3.0\n * @author https://qm.qq.com/cgi-bin/qm/qr?k=dEBGYbmu1lIRp7bAgHFim0W1uDsYl9v5&jump_from=webapi&authKey=fmTG96MhfqDQ5KARA/OvnuWAigCAloClvYhtSiEQd0jQneXmGons54BwlAh1+bUi\n * @homepage https://github.com/haonanren118/jiexiang-Music-Source\n * @license MIT\n * @update 2026-09-13\n * @changelog\n    1.修复wy音源\n    2.新增QQ越权\n */"));
 
 // ==================== 子源: qingliang ====================
 ;(function (__lx) {
@@ -2698,7 +2717,7 @@ console.log('[咪咕音乐] 后端数: ' + MG_BACKENDS.length)
   lx.send(lx.EVENT_NAMES.inited, { status: true, sources: sources });
 })();
 
-})(__SUB_REGISTER("qingliang"));
+})(__SUB_REGISTER("qingliang", ""));
 
   // ==================== 平台声明：取第一优先源，不做合并 ====================
   var merged = {}
@@ -2713,7 +2732,7 @@ console.log('[咪咕音乐] 后端数: ' + MG_BACKENDS.length)
     var srcs = st.inited.sources
     for (var k in srcs) {
       if (!Object.prototype.hasOwnProperty.call(srcs, k)) continue
-      if (merged[k]) continue          // 已由更高优先级的源接管，跳过
+      if (merged[k]) continue
       var s = srcs[k]
       merged[k] = {
         name: s.name,
@@ -2751,8 +2770,6 @@ console.log('[咪咕音乐] 后端数: ' + MG_BACKENDS.length)
     return typeof u === 'string' && /^https?:\/\//i.test(u.trim()) && u.trim().length > 12
   }
 
-  // 按音质筛候选源：请求 320k/flac 时，只声明 128k 的源不参与，
-  // 否则它会返回与该音质无关的垃圾地址，播放器表现为"播放报错"
   function candidatesFor(source, quality) {
     var strict = []
     var loose = []
@@ -2818,7 +2835,7 @@ console.log('[咪咕音乐] 后端数: ' + MG_BACKENDS.length)
             errors.push('  ' + st.name + ': 返回非法地址 ' + String(url).slice(0, 60))
             return attempt()
           }
-          try { console.log('[洋仔聚合] ' + source + ' 命中 ' + st.name + ' ' + (Date.now() - t0) + 'ms') } catch (e) {}
+          try { console.log('[洋仔聚合] ' + source + '/' + quality + ' 命中 ' + st.name + ' ' + (Date.now() - t0) + 'ms') } catch (e) {}
           done(null, String(url).trim())
         }
 
