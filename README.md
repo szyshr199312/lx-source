@@ -25,28 +25,50 @@
 
 合并版覆盖 **QQ音乐 / 网易云 / 酷我 / 酷狗 / 咪咕 / 汽水** 六个平台，还带歌词和封面 action。
 
-### 技术上的关键改动（v2）
+### 版本演进（踩过的坑，别重复踩）
 
-初版用了 `new Function` 动态执行 + base64 内嵌，这套在 Node 里能跑，但 **React Native 的 Hermes 引擎默认禁用动态代码执行**，电视/手机上会加载失败或超时。
+**v1 — `new Function` + base64（已废弃）**
+把每个子源 base64 内嵌，运行时 `new Function(src)()` 动态执行。Node 里跑得好，但 **React Native 的 Hermes 引擎默认禁用动态代码执行** —— 电视/手机上脚本根本执行不了，洛雪等不到 `send(inited)`，报"加载超时"。
 
-v2 改成**源码级内联**：每个子源包进 IIFE，把源码里的 `globalThis.lx` 替换成局部参数 `__lx`，全程零 `eval`。副作用是体积从 284 KB 降到 214 KB（省掉 base64 膨胀的 36%）。
+**v2 — 源码级内联 + 并发竞速（已废弃）**
+改成零 `eval`：每个子源包进 IIFE，源码里的 `globalThis.lx` 替换成局部参数 `__lx`。体积从 284 KB 降到 214 KB。调度改成并发竞速，解决串行叠加超时。
 
-### 调度改成并发竞速
+**v3 — 串行 fallback（已废弃）**
+竞速会让"先返回"的源抢先，但先返回 ≠ 结果可用。改回串行，首源成功即返回。
 
-v1 是串行 fallback：源 A 试 5 秒 → 源 B 试 5 秒 → ……最坏 20 秒，洛雪早超时了。
+**v4 — 按音质筛选源（当前版本）**
+v3 遗留一个致命 bug：**音质不匹配**。
 
-v2 是**并发竞速**：所有支持该平台的子源同时发请求，谁先返回有效链接用谁，其余的忽略。总耗时 = 最快那个源的时间，不叠加。总超时 9 秒兜底。
+洛雪按你设置的首选音质发请求（`type: "flac"` / `"master"`）。合并版里各源支持的音质不同：
 
-2026-11-21 本地 mock 洛雪环境实测（Node 24）：
+| 源 | QQ音乐支持的音质 |
+|---|---|
+| 杰翔聚合 | 128k / 320k / flac |
+| 轻量四平台 | **只有 128k** |
+| 星澜聚合 | 含 master / hires / atmos |
+| 星海音乐 | 含 master |
 
-| 平台 | 结果 | 耗时 | 说明 |
+杰翔没接住时 fallback 到"轻量四平台"，它不理解 flac 请求，返回了 `https://cdn-img.gitcode.com/db/ee/d36b953e...` —— 那是**代码托管站的 CDN 地址，根本不是音频文件**。播放器拿到这个去加载，就是"播放报错"。
+
+v4 的修法：`candidatesFor(source, quality)` 只把**声明支持该音质**的源列为候选，请求 flac 时只支持 128k 的源直接出局。没源接住就明确报错（附每个源失败原因），绝不返回假链接。
+
+2026-11-21 本地 mock 洛雪环境实测（Node 24，v4）：
+
+| 请求音质 | 结果 | 耗时 | 返回域名 |
 |---|---|---|---|
-| 子源加载 | ✅ 4/4 | 52 ms | 四个子源全部注册成功 |
-| 平台声明 | ✅ 6 个 | — | tx/wy/kw/kg/mg/qs |
-| QQ音乐 | ✅ 出链 | 656 ms | 拿到真实 `aqqmusic.tc.qq.com` vkey 链接 |
-| 酷我 | ✅ 出链 | 159 ms | |
-| 网易云 | ✅ 出链 | 4,656 ms | 单源就要这么慢，靠竞速不叠加 |
-| 酷狗 | ⚠️ 需完整 hash | — | 测试用假 hash，属预期失败 |
+| 128k | ✅ | 747 ms | `ws.stream.qqmusic.qq.com` |
+| 320k | ✅ | 439 ms | `ws.stream.qqmusic.qq.com` |
+| flac | ✅ | 416 ms | `ws.stream.qqmusic.qq.com` |
+| master | ✅ | 45 ms | `ws.stream.qqmusic.qq.com`（转由星澜/星海承接） |
+| 子源加载 | ✅ 4/4 | 48 ms | 平台归属 tx/wy/kw/kg/mg → 杰翔，qs → 星澜 |
+
+拿不到音质匹配的源时，返回的错误长这样（而不是给个坏地址）：
+
+```
+[洋仔聚合] 全部音源失败（2 个）
+  jiexiang: 无法获取歌曲ID
+  xinglan: 无法获取歌曲ID
+```
 
 ### 还是超时怎么办
 
@@ -54,7 +76,11 @@ v2 是**并发竞速**：所有支持该平台的子源同时发请求，谁先�
 
 1. **换成 84 KB 的单源 `jiexiang/latest.js`**。如果这个也超时，问题不在合并脚本，在下载链路或客户端本身。
 2. **改用本地文件导入**：先把 js 下到 U 盘/手机，洛雪里选「本地导入」。排除 GitHub 下载慢的因素。
-3. **换 GitHub 加速域名**：`https://gh-proxy.org/https://raw.githubusercontent.com/szyshr199312/lx-source/main/allinone/lite.js`。本仓库不用 jsdelivr —— 实测 `cdn.jsdelivr.net` 在国内多次 TLS 握手被重置，完全不通。
+3. **换 GitHub 加速域名**（**实测有效**，2026-11-21）：
+   ```
+   https://gh-proxy.org/https://raw.githubusercontent.com/szyshr199312/lx-source/main/allinone/lite.js
+   ```
+   电视端直连 `raw.githubusercontent.com` 会卡在加载阶段，套上 `gh-proxy.org/` 前缀后能正常加载。本仓库不用 jsdelivr —— 实测 `cdn.jsdelivr.net` 在国内多次 TLS 握手被重置，完全不通。
 4. **看洛雪的源管理页有没有报错文案**。加载超时和播放超时是两回事：前者是脚本没在限定时间内 `send(inited)`，后者是 `musicUrl` 请求没返回。
 
 **为什么洛雪要一条一条导？** 洛雪的自定义源机制是「一个脚本 = 一个音源」，没有订阅/批量导入功能（那是 MusicFree 的机制）。所以要么多导几条，要么用上面的合并版。
